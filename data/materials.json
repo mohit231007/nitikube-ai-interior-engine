@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "materials": [],
+  "policy": {
+    "purpose": "Production material records belong here only after their numeric properties are backed by an explicit evidence state and provenance.",
+    "verified_numeric_fact_requires": [
+      "source_url",
+      "checked_at"
+    ],
+    "forbidden": [
+      "invented property values",
+      "unsourced values labelled verified",
+      "stale prices presented as current market prices"
+    ]
+  }
+}
