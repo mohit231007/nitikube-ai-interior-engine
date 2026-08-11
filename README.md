@@ -2,61 +2,143 @@
 
 **Measured interiors. Verified decisions.**
 
-NitiKube AI is a physics-first, evidence-grounded interior engineering system that combines deterministic maths/physics/geometry, computer vision, optimisation, material intelligence, climate context and live product discovery.
+NitiKube AI is a physics-first, evidence-grounded interior engineering system for homeowners who want to understand what a room/home actually needs before spending money on interiors.
 
-The product was conceived around a simple rule:
+The permanent product rule is:
 
 > **No recommendation without reasoning.**
 
-A recommendation must be backed by at least one of the following: a calculation, verified measurement, rule/standard, material/product specification, geographic/climate input, or an explicit label that the choice is subjective/aesthetic.
+A recommendation must be backed by a calculation, a verified measurement, a rule/standard, a sourced material/product specification, geographic/climate evidence, or be explicitly labelled as subjective/aesthetic.
 
-## What is already implemented in v0.1
+## Current build status
 
-- Verification-first floor-plan CV baseline using OpenCV line detection
-- Feet/inches conversion, rectangular geometry and arbitrary polygon area via the shoelace formula
-- Even fixture-grid generation and layout dimensions
-- Lighting lumen method: `Phi = E × A / (CU × MF)`
-- COB beam geometry: `D = 2h tan(theta/2)`
-- Maintained-lux estimation and beam-spacing warnings
-- 12-COB 3×4 layout evaluation for the initial drawing/dining-room case
-- Tile/board/panel quantity calculation with explicit wastage
-- Paint quantity calculation from manufacturer coverage assumptions
-- Dew-point/condensation check using the Magnus approximation
-- Simple thermal-resistance/U-value/heat-flow calculations
-- Budget envelopes and weighted feasible-option scoring
-- Evidence-confidence scoring
-- Product-search abstraction: optional Brave live search plus zero-cost retailer search fallbacks
-- Streamlit UI covering floor-plan CV, lighting, materials, climate/thermal, budget, products and evidence
-- Pytest deterministic-core tests
-- GitHub Actions CI on Python 3.11 and 3.12
+NitiKube is already a working multi-page Streamlit application, not a placeholder. The repository currently includes:
 
-## Why NitiKube is different
+### Geometry + floor plans
 
-NitiKube does **not** ask a language model to do engineering arithmetic. The architecture is deliberately split:
+- feet/inches and ft²/m² conversion
+- rectangle and arbitrary-polygon area (shoelace formula)
+- deterministic fixture-grid coordinates and spacing
+- OpenCV line-detection baseline
+- user-verified pixel → physical scale calibration
+- multi-reference calibration disagreement/spread reporting
+- pixel-polygon → physical area conversion
+- heuristic enclosed/free-space region proposals from uploaded floor plans
+- explicit user verification before CV proposals become trusted geometry
+- downloadable verified-region CSV
+
+### Lighting engineering
+
+- lumen method: `Phi = E × A / (CU × MF)`
+- maintained-lux estimate
+- COB beam diameter: `D = 2h tan(theta/2)`
+- beam-spacing / overlap diagnostics
+- constrained search across fixture count, grid geometry and available lumen outputs
+- deterministic downloadable SVG lighting plans with nominal beam circles
+- initial benchmark: 10′7″ × 22′9″ drawing/dining room, 9 ft false ceiling, 36° COBs
+
+### Materials + quantities
+
+- tile/board/panel quantities with explicit waste allowance
+- paint quantities using user/manufacturer coverage input
+- provenance-aware material-property model
+- numeric verified facts require source + verification timestamp
+- unverified material values cannot silently drive verified recommendations
+- empty production material registry rather than invented starter facts
+- deterministic product-specification matching with matched / failed / unknown fields
+
+### Building physics
+
+- dew point and simple condensation-risk check
+- thermal layer `R = d/k`
+- assembly U-value
+- conductive heat flow `Q = UAΔT`
+- latitude/day/solar-time solar geometry
+- first-pass shadow geometry
+- first-order Sabine RT60 room-acoustics model
+- free-field distance/SPL-change diagnostic
+- connected/diversified electrical load arithmetic
+- single-phase current equation
+- energy calculations
+- generic conductor resistance + voltage-drop math using explicit resistivity input
+
+### Ergonomics + optimisation
+
+- rectangular furniture fit
+- dining table/chair/movement envelope
+- TV/screen geometry from chosen field of view
+- budget envelopes
+- weighted feasible-option ranking
+- Pareto-front calculation
+- constrained lighting-layout optimiser
+- professional-verification guardrails for structural/regulatory scopes
+
+### Procurement + execution
+
+- specification-first search-query builder
+- optional Brave search adapter
+- zero-cost retailer-search fallbacks
+- price verification state (price + source + timestamp)
+- BOQ line/quantity audit primitives
+- CSV/XLSX quotation ingestion
+- explicit quotation column mapping
+- `quantity × rate` arithmetic validation
+- downloadable quote-audit CSV
+- dependency-graph execution scheduling
+- cycle detection
+- earliest start/finish and critical path
+- simple cumulative task-cost timing
+
+### Quality
+
+- deterministic Python core kept separate from AI explanation
+- Python 3.11 + 3.12 GitHub Actions CI
+- compile checks
+- pytest test suite
+- Streamlit app/page smoke tests
+- no mandatory paid AI API
+
+## Application pages
+
+Run `streamlit run app.py` and use the Streamlit navigation:
+
+1. Main app — floor-plan CV baseline, room/lighting, quantities, climate/thermal, budget, products, evidence
+2. Ergonomics + BOQ
+3. Optimizers
+4. Materials + Products
+5. Plan Calibration + SVG Export
+6. Building Physics
+7. Quotation + Execution
+8. Floor-plan Region Proposals
+
+## Architecture contract
 
 ```text
-floor plan / user inputs / product specs
-                 │
-                 ▼
-         verification gate
-                 │
-      ┌──────────┼───────────┐
-      ▼          ▼           ▼
-  geometry    science    live evidence
-   engine      engine       adapters
-      │          │           │
-      └──────────┼───────────┘
-                 ▼
-       feasible design options
-                 │
-                 ▼
-        optimisation / ranking
-                 │
-                 ▼
-       AI explanation / UX
+floor plan / user inputs / product specs / location / budget
+                         │
+                         ▼
+                 VERIFICATION GATE
+                         │
+       ┌─────────────────┼──────────────────┐
+       ▼                 ▼                  ▼
+    GEOMETRY          SCIENCE            EVIDENCE
+       │                 │                  │
+       ├─────────────────┼──────────────────┤
+       ▼                 ▼                  ▼
+      CV/ML         CONSTRAINTS       LIVE ADAPTERS
+       │                 │                  │
+       └─────────────────┼──────────────────┘
+                         ▼
+                 FEASIBLE OPTIONS
+                         │
+                         ▼
+               OPTIMISATION / RANKING
+                         │
+                         ▼
+             AI EXPLANATION / DESIGN UX
 ```
 
-AI/ML/CV may extract, classify, rank and explain. The deterministic science core owns the numbers.
+**AI does not own engineering arithmetic.** AI/ML/CV may propose, classify, rank and explain. Deterministic tested code owns geometry, quantities, physics and constraint calculations.
 
 ## Quick start
 
@@ -73,86 +155,47 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Run the deterministic tests:
+Run tests:
 
 ```bash
 pytest -q
 ```
 
-## Initial real-world benchmark
-
-The first benchmark reproduces the room that triggered the project:
-
-- Drawing/dining room: `10′7″ × 22′9″`
-- False ceiling: `9 ft`
-- Example COB beam: `36°`
-- Default work/evaluation plane: `2.5 ft`
-- User can evaluate 12 COBs as a `3 × 4` grid and compare spacing to the nominal beam footprint
-
-For a beam angle `theta` and vertical distance `h` from fixture to the evaluation plane:
-
-```text
-D = 2h tan(theta / 2)
-```
-
-For a 36° COB mounted at 9 ft and evaluated at 2.5 ft:
-
-```text
-h = 6.5 ft
-D ≈ 4.22 ft
-```
-
-The UI therefore evaluates both lumens **and** spatial beam coverage rather than assuming that total wattage alone makes a room comfortable.
-
 ## Zero-cost philosophy
 
-The initial public version is designed to run without mandatory paid AI APIs:
+The MVP is deliberately designed without mandatory paid model APIs:
 
-- deterministic Python for science/geometry/optimisation
-- OpenCV for local CV baseline
-- Streamlit Community Cloud compatible
-- optional no-key climate adapter for prototyping
-- optional search adapter when a free quota/key is available
-- direct retailer search links when live search is unavailable
+- deterministic Python for engineering
+- OpenCV for CV baselines
+- Streamlit-compatible hosting
+- optional no-key climate/geocoding adapters for prototyping
+- optional search adapter only when a key/quota is available
+- direct retailer-search links as a zero-cost fallback
+- SVG/Plotly rendering instead of paid image generation
 
-External providers are isolated behind adapters so the core is not locked to a vendor or a free-tier policy.
+External providers remain replaceable. If a free quota disappears, NitiKube should degrade gracefully instead of silently generating a bill.
 
-## Repository structure
+## What is *not* claimed complete yet
 
-```text
-.
-├── app.py
-├── nitikube/
-│   ├── __init__.py
-│   ├── budget.py
-│   ├── climate.py
-│   ├── confidence.py
-│   ├── floorplan_cv.py
-│   ├── geometry.py
-│   ├── lighting.py
-│   ├── materials.py
-│   └── product_search.py
-├── tests/
-│   ├── test_geometry.py
-│   ├── test_lighting.py
-│   ├── test_materials.py
-│   └── test_systems.py
-├── docs/
-│   ├── ARCHITECTURE.md
-│   └── ROADMAP.md
-├── .github/workflows/ci.yml
-├── .streamlit/config.toml
-├── requirements.txt
-└── LICENSE
-```
+The repository has a substantial engineering foundation, but a production-grade whole-home Interior DesignOS still needs:
+
+- robust room polygons + doors/windows/columns/stairs + dimension OCR
+- an interactive geometry correction editor
+- sourced manufacturer/material datasets at useful scale
+- long-term climate/design-day/daylight data and higher-fidelity solar modelling
+- richer room-specific planners (kitchen, wardrobes, bathroom, bedroom, full-home graph)
+- broader local live product inventory/price integrations
+- PDF/photo quotation OCR with verification
+- lifecycle-cost/material substitution optimisation
+- 3D/WebGL room/house visualisation
+- browser-side/local AI style and preference models
+- production deployment, telemetry/privacy controls and larger real-world regression datasets
+
+See [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Safety boundary
 
-NitiKube can support residential interior planning, layout, estimation, material selection, lighting, procurement and design auditing. It must **not** present itself as a substitute for licensed verification where law/safety requires it. The application should flag professional verification for load-bearing or structural changes, seismic/structural engineering, major electrical-service design, gas systems, fire-code certification, waterproofing guarantees and statutory approvals.
-
-## Roadmap
-
-See [`docs/ROADMAP.md`](docs/ROADMAP.md). The direction is a full Interior DesignOS: floor-plan understanding, climate-aware material recommendations, geometry/ergonomics, lighting, thermal/moisture/acoustic modelling, product search, BOQ generation, quotation auditing, project sequencing and eventually interactive 2D/3D visualisation.
+NitiKube can assist with interior planning, quantities, layouts, material selection, lighting, procurement and project sequencing. It must flag professional verification for load-bearing/structural work, seismic design, major electrical-service design, gas systems, fire-code certification, statutory approvals and other regulated/safety-critical scopes.
 
 ## License
 
