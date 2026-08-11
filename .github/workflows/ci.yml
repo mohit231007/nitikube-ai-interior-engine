@@ -26,4 +26,4 @@ jobs:
       - name: Import Streamlit app smoke test
         run: python -c "import app"
       - name: Smoke test Streamlit pages
-        run: python -c "import runpy; [runpy.run_path(p) for p in ['pages/01_Ergonomics_and_BOQ.py','pages/02_Optimizers.py','pages/03_Materials_and_Products.py','pages/04_Plan_Calibration_and_Export.py','pages/05_Building_Physics.py']]"
+        run: python -c "import runpy; [runpy.run_path(p) for p in ['pages/01_Ergonomics_and_BOQ.py','pages/02_Optimizers.py','pages/03_Materials_and_Products.py','pages/04_Plan_Calibration_and_Export.py','pages/05_Building_Physics.py','pages/06_Quotation_and_Execution.py']]"
