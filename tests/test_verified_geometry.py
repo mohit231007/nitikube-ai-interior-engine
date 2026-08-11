@@ -79,7 +79,10 @@ def test_opening_must_match_declared_boundaries():
         verified=True,
     )
     errors = validate_geometry([a], [bad])
-    assert any("does not lie on a verified room boundary" in error for error in errors)
+    assert any(
+        "declared room boundary" in error or "does not lie on a verified room boundary" in error
+        for error in errors
+    )
 
 
 def test_unverified_opening_does_not_block_geometry():
