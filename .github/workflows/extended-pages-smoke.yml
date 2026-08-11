@@ -1,0 +1,29 @@
+name: Extended Pages Smoke
+
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+
+jobs:
+  smoke-new-pages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Compile all Python files
+        run: python -m compileall -q .
+      - name: Run deterministic tests
+        run: pytest -q
+      - name: Smoke test room planners and orchestrator
+        run: >-
+          python -c "import runpy; [runpy.run_path(p) for p in [
+          'pages/15_Kitchen_Planner.py',
+          'pages/16_Bedroom_and_Wardrobe_Planner.py',
+          'pages/17_Bathroom_Planner.py',
+          'pages/18_Project_Orchestrator.py']]"
