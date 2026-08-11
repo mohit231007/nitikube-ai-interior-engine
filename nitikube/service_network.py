@@ -255,7 +255,11 @@ def _node_from_dict(data: Mapping[str, Any]) -> NetworkNode:
 
 def _edge_from_dict(data: Mapping[str, Any]) -> NetworkEdge:
     required = ("edge_id", "start_node_id", "end_node_id", "allowed_kinds")
-    missing = [key for key in required if data.get(key) in {None, ""}]
+    missing = [
+        key
+        for key in required
+        if key not in data or data.get(key) is None or data.get(key) == ""
+    ]
     if missing:
         raise ValueError(f"missing network-edge fields: {missing}")
     raw_kinds = data["allowed_kinds"]
@@ -412,7 +416,7 @@ def shortest_network_path(
             continue
         if node_id == end_node_id:
             return NetworkPath(start_node_id, end_node_id, path_nodes, path_edges, distance)
-        for next_id, edge_id, length in adjacency.get(node_id, ()): 
+        for next_id, edge_id, length in adjacency.get(node_id, ()):
             new_distance = distance + length
             if new_distance + _EPS < best.get(next_id, math.inf):
                 best[next_id] = new_distance
