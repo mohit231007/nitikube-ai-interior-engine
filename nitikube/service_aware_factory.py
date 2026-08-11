@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, replace
 import json
 import math
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping
 
 from .bathroom_planner import FixtureSpec, ShowerSpec, generate_bathroom_candidates
 from .bedroom_planner import BedSpec, DeskSpec, WardrobeSpec, generate_bedroom_candidates
@@ -24,25 +24,22 @@ from .service_aware_candidates import (
     evaluate_candidate_services,
 )
 from .service_points import (
-    ServicePoint,
     bathroom_service_targets,
     bedroom_service_targets,
     kitchen_service_targets,
     layout_service_targets,
     load_service_points_json,
 )
-from .verified_geometry import VerifiedOpening, VerifiedRoom, geometry_from_project_json
+from .verified_geometry import VerifiedRoom, geometry_from_project_json
 from .whole_home_factory import (
     FactoryCandidate,
     RoomFactoryResult,
     RoomRole,
     _optimizer_geometries,
-    _opening_keepouts,
     _room_policies,
     _score_weights,
     build_whole_home_candidates,
     candidate_to_optimizer_option,
-    factory_rows,
     room_options_json,
     verified_room_rect,
 )
@@ -132,11 +129,12 @@ def _fixture(data: Mapping[str, Any], fixture_id: str, label: str, context: str)
     )
 
 
-def _raw_candidates(
-    room: VerifiedRoom,
-    role: str,
-    profile: Mapping[str, Any],
-) -> tuple[Any, ...]:
+def _raw_candidates(room: VerifiedRoom, role: str, profile: Mapping[str, Any]) -> tuple[Any, ...]:
+    """Regenerate the public planner candidates only to recover target geometry.
+
+    The generated layout-ID set is checked against the v0.23 factory output before
+    any service evidence is bound to a candidate.
+    """
     rect = verified_room_rect(room)
     planner = profile.get("planner") or {}
 
@@ -163,6 +161,7 @@ def _raw_candidates(
                 width_ft=_required_positive(desk_data, "width_ft", "planner.desk"),
                 depth_ft=_required_positive(desk_data, "depth_ft", "planner.desk"),
             )
+        requirements = profile.get("requirements") or {}
         return generate_bedroom_candidates(
             rect,
             bed=BedSpec(
@@ -176,10 +175,10 @@ def _raw_candidates(
             ),
             desk=desk,
             wall_margin_ft=_nonnegative(planner, "wall_margin_ft", "planner"),
-            side_clearance_ft=_nonnegative(profile.get("requirements") or {}, "side_clearance_ft", "requirements"),
-            foot_clearance_ft=_nonnegative(profile.get("requirements") or {}, "foot_clearance_ft", "requirements"),
+            side_clearance_ft=_nonnegative(requirements, "side_clearance_ft", "requirements"),
+            foot_clearance_ft=_nonnegative(requirements, "foot_clearance_ft", "requirements"),
             wardrobe_front_clearance_ft=_nonnegative(
-                profile.get("requirements") or {},
+                requirements,
                 "wardrobe_front_clearance_ft",
                 "requirements",
             ),
@@ -249,7 +248,11 @@ def _parse_brief(payload: str | bytes | Mapping[str, Any]) -> tuple[dict[str, An
         data = json.loads(text)
     if not isinstance(data, dict):
         raise ValueError("whole-home brief must be a JSON object")
-    if data.get("schema") not in {None, "nitikube.whole_home_brief", "nitikube.service_aware_whole_home_brief"}:
+    if data.get("schema") not in {
+        None,
+        "nitikube.whole_home_brief",
+        "nitikube.service_aware_whole_home_brief",
+    }:
         raise ValueError("unsupported service-aware whole-home brief schema")
     return data, text
 
@@ -263,39 +266,28 @@ def _service_rules_for_profile(profile: Mapping[str, Any]) -> CandidateServiceRu
     return candidate_service_rules_from_dict(raw)
 
 
-def _service_aware_candidate(
-    base: FactoryCandidate,
-    routing,
-) -> FactoryCandidate:
+def _service_aware_candidate(base: FactoryCandidate, routing) -> FactoryCandidate:
     metrics = dict(base.metrics)
     if routing.total_route_ft is not None:
         metrics["service_total_route_ft"] = float(routing.total_route_ft)
     if routing.max_route_ft is not None:
         metrics["service_max_route_ft"] = float(routing.max_route_ft)
-    failures = base.failed + tuple(f"service:{item}" for item in routing.failed)
-    warnings = base.warnings + tuple(f"service:{item}" for item in routing.warnings)
-    notes = base.notes + (
-        "Service feasibility evaluated from actual candidate target coordinates against verified service-point evidence.",
-        "Service route distances are straight-line lower bounds, not construction-ready routed lengths.",
-    )
-    features = tuple(dict.fromkeys(base.features + ("service_evaluated",)))
     return replace(
         base,
         feasible=base.feasible and routing.feasible,
-        failed=failures,
-        warnings=warnings,
+        failed=base.failed + tuple(f"service:{item}" for item in routing.failed),
+        warnings=base.warnings + tuple(f"service:{item}" for item in routing.warnings),
         metrics=metrics,
-        features=features,
-        notes=notes,
+        features=tuple(dict.fromkeys(base.features + ("service_evaluated",))),
+        notes=base.notes
+        + (
+            "Service feasibility evaluated from actual candidate target coordinates against verified service-point evidence.",
+            "Service route distances are straight-line lower bounds, not construction-ready routed lengths.",
+        ),
     )
 
 
-def _augment_package_hash(
-    package: Mapping[str, Any],
-    *,
-    service_points_ref,
-    brief_ref,
-) -> dict[str, Any]:
+def _augment_package_hash(package: Mapping[str, Any], *, service_points_ref, brief_ref) -> dict[str, Any]:
     core = {key: value for key, value in package.items() if key != "package_id"}
     core["schema_version"] = "0.26"
     core["service_points_artifact"] = asdict(service_points_ref)
@@ -317,7 +309,7 @@ def build_service_aware_whole_home_candidates(
     brief_artifact_name: str = "nitikube_service_aware_whole_home_brief.json",
 ) -> ServiceAwareWholeHomeFactoryResult:
     geometry_text = geometry_payload.decode("utf-8") if isinstance(geometry_payload, bytes) else geometry_payload
-    project_name, rooms, openings, _metadata = geometry_from_project_json(geometry_text)
+    project_name, rooms, _openings, _metadata = geometry_from_project_json(geometry_text)
     verified_rooms = [room for room in rooms if room.verified]
     if not verified_rooms:
         raise ValueError("verified geometry contains no verified rooms")
@@ -330,9 +322,19 @@ def build_service_aware_whole_home_candidates(
     service_points = load_service_points_json(service_points_payload, rooms=verified_rooms)
     service_text = service_points_payload.decode("utf-8") if isinstance(service_points_payload, bytes) else service_points_payload
 
+    # v0.23 intentionally accepts only its own schema. The service-aware schema is
+    # an extension used by this wrapper, so downgrade only the internal copy that
+    # is sent through the v0.23 geometry/cost/score factory. The original brief
+    # text/schema is retained and hashed as the v0.26 evidence artifact.
     base_brief = dict(brief)
     base_brief.pop("optimization", None)
-    base = build_whole_home_candidates(geometry_text, base_brief, geometry_artifact_name=geometry_artifact_name)
+    if base_brief.get("schema") == "nitikube.service_aware_whole_home_brief":
+        base_brief["schema"] = "nitikube.whole_home_brief"
+    base = build_whole_home_candidates(
+        geometry_text,
+        base_brief,
+        geometry_artifact_name=geometry_artifact_name,
+    )
 
     room_lookup = {room.room_id: room for room in verified_rooms}
     new_room_results: list[RoomFactoryResult] = []
@@ -361,15 +363,12 @@ def build_service_aware_whole_home_candidates(
 
         rules = _service_rules_for_profile(profile)
         if rules is None:
-            # No service rule means this room retains v0.23 behavior. The audit is
-            # explicit so absence is never misreported as a service PASS.
             rebuilt_options: list[RoomDesignOption] = []
             for candidate in base_room.candidates:
                 option, _issues = candidate_to_optimizer_option(candidate, profile)
                 if option is not None:
                     rebuilt_options.append(option)
-            new_room = replace(base_room, optimizer_options=tuple(rebuilt_options))
-            new_room_results.append(new_room)
+            new_room_results.append(replace(base_room, optimizer_options=tuple(rebuilt_options)))
             all_options.extend(rebuilt_options)
             service_audits.append(
                 ServiceAwareRoomAudit(
@@ -394,17 +393,21 @@ def build_service_aware_whole_home_candidates(
                 raise ValueError(
                     "service-aware candidate regeneration diverged from the v0.23 factory candidate IDs"
                 )
+
             updated_candidates: list[FactoryCandidate] = []
             updated_options: list[RoomDesignOption] = []
-            service_feasible = 0
-            overall_feasible = 0
+            service_feasible_count = 0
+            overall_feasible_count = 0
             for candidate in base_room.candidates:
                 raw = raw_map[candidate.layout_id]
-                targets = _target_adapter(base_room.role, raw, base_room.room_id)
-                routing = evaluate_candidate_services(service_points, targets, rules)
-                service_feasible += int(routing.feasible)
+                routing = evaluate_candidate_services(
+                    service_points,
+                    _target_adapter(base_room.role, raw, base_room.room_id),
+                    rules,
+                )
+                service_feasible_count += int(routing.feasible)
                 updated = _service_aware_candidate(candidate, routing)
-                overall_feasible += int(updated.feasible)
+                overall_feasible_count += int(updated.feasible)
                 updated_candidates.append(updated)
                 option, _issues = candidate_to_optimizer_option(updated, profile)
                 if option is not None:
@@ -416,17 +419,19 @@ def build_service_aware_whole_home_candidates(
                 status = "optimizer_ready" if any(option.feasible for option in updated_options) else "service_blocked"
             else:
                 status = "geometry_only"
+
             warnings = list(base_room.warnings)
-            if rules.requirements == ():
+            if not rules.requirements:
                 warnings.append("service_rules is configured with zero requirements; no service constraint was applied")
-            new_room = replace(
-                base_room,
-                status=status,
-                candidates=tuple(updated_candidates),
-                optimizer_options=tuple(updated_options),
-                warnings=tuple(warnings),
+            new_room_results.append(
+                replace(
+                    base_room,
+                    status=status,
+                    candidates=tuple(updated_candidates),
+                    optimizer_options=tuple(updated_options),
+                    warnings=tuple(warnings),
+                )
             )
-            new_room_results.append(new_room)
             all_options.extend(updated_options)
             service_audits.append(
                 ServiceAwareRoomAudit(
@@ -436,19 +441,20 @@ def build_service_aware_whole_home_candidates(
                     "evaluated",
                     len(rules.requirements),
                     len(updated_candidates),
-                    service_feasible,
-                    overall_feasible,
+                    service_feasible_count,
+                    overall_feasible_count,
                 )
             )
         except Exception as exc:
-            blocked = replace(
-                base_room,
-                status="blocked",
-                candidates=(),
-                optimizer_options=(),
-                errors=base_room.errors + (f"service-aware factory: {exc}",),
+            new_room_results.append(
+                replace(
+                    base_room,
+                    status="blocked",
+                    candidates=(),
+                    optimizer_options=(),
+                    errors=base_room.errors + (f"service-aware factory: {exc}",),
+                )
             )
-            new_room_results.append(blocked)
             service_audits.append(
                 ServiceAwareRoomAudit(
                     base_room.room_id,
@@ -481,7 +487,10 @@ def build_service_aware_whole_home_candidates(
         )
 
     required_raw = brief.get("required_room_ids")
-    required_room_ids = tuple(str(item) for item in (required_raw if required_raw is not None else base.required_room_ids))
+    required_room_ids = tuple(
+        str(item)
+        for item in (required_raw if required_raw is not None else base.required_room_ids)
+    )
     if not required_room_ids:
         raise ValueError("required_room_ids cannot be empty")
 
@@ -572,17 +581,22 @@ def build_service_aware_whole_home_candidates(
 
 
 def service_aware_factory_rows(result: ServiceAwareWholeHomeFactoryResult) -> list[dict[str, Any]]:
-    base_by_room = {row["room_id"]: row for row in factory_rows(
-        type("FactoryView", (), {"room_results": result.room_results})()
-    )}
-    service_by_room = {audit.room_id: audit for audit in result.room_service_audits}
+    audit_by_room = {audit.room_id: audit for audit in result.room_service_audits}
     rows: list[dict[str, Any]] = []
-    for room_id in result.required_room_ids:
-        base = base_by_room.get(room_id, {})
-        audit = service_by_room.get(room_id)
+    for room_result in result.room_results:
+        audit = audit_by_room.get(room_result.room_id)
         rows.append(
             {
-                **base,
+                "room_id": room_result.room_id,
+                "room_name": room_result.room_name,
+                "role": room_result.role,
+                "role_source": room_result.role_source,
+                "status": room_result.status,
+                "candidate_count": len(room_result.candidates),
+                "feasible_candidate_count": room_result.feasible_candidate_count,
+                "optimizer_option_count": len(room_result.optimizer_options),
+                "errors": " | ".join(room_result.errors),
+                "warnings": " | ".join(room_result.warnings),
                 "service_status": audit.service_status if audit else "unknown",
                 "service_rule_count": audit.service_rule_count if audit else 0,
                 "service_candidates_checked": audit.candidates_checked if audit else 0,
