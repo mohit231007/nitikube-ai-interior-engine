@@ -1,0 +1,265 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+import json
+import os
+
+import pandas as pd
+import streamlit as st
+
+from nitikube.procurement import (
+    ProcurementRequirement,
+    best_offer_per_product,
+    load_offers_json,
+    procurement_rows,
+    rank_offers,
+)
+from nitikube.product_page import parse_product_html, proposal_rows
+from nitikube.product_search import brave_web_search, retailer_search_links, specification_query
+from nitikube.spec_match import ProductRequirement
+
+
+st.set_page_config(page_title="NitiKube — Procurement Intelligence", page_icon="⌕", layout="wide")
+st.title("Procurement Intelligence")
+st.caption(
+    "Discovery, evidence validation, price freshness, product-variant identity and specification matching are separate stages. "
+    "A search result is not automatically a verified product, and a product URL is not automatically a current price claim."
+)
+
+search_tab, offer_tab, jsonld_tab = st.tabs(["Product Discovery", "Verified Offer Ranking", "Product Page JSON-LD"])
+
+
+def _secret(name: str) -> str:
+    value = os.getenv(name, "")
+    if value:
+        return value
+    try:
+        return str(st.secrets.get(name, ""))
+    except Exception:
+        return ""
+
+
+with search_tab:
+    st.subheader("Specification-first discovery")
+    a, b, c, d = st.columns(4)
+    category = a.text_input("Category", "COB downlight", key="discover_category")
+    watts = b.number_input("Watts", min_value=0.0, value=7.0, step=0.5)
+    kelvin = c.number_input("Kelvin", min_value=1000, value=3000, step=100)
+    beam = d.number_input("Beam angle °", min_value=1.0, value=36.0, step=1.0)
+    e, f, g = st.columns(3)
+    cri = e.number_input("Minimum CRI", min_value=0, max_value=100, value=90, step=1)
+    lumens = f.text_input("Lumen target/range", "450-550")
+    location = g.text_input("Location context", "Gurugram")
+
+    query = specification_query(
+        category=category,
+        watts=watts if watts > 0 else None,
+        kelvin=int(kelvin),
+        beam_angle_deg=beam,
+        cri_min=int(cri),
+        lumens=lumens or None,
+        location=location or None,
+    )
+    st.code(query)
+
+    st.write("**Zero-cost fallback links**")
+    fallback = retailer_search_links(query, country="IN")
+    fallback_df = pd.DataFrame(
+        [{"source": item.source, "search_url": item.url, "status": "discovery link only — no price/stock verification"} for item in fallback]
+    )
+    st.dataframe(fallback_df, use_container_width=True, hide_index=True)
+
+    st.divider()
+    st.write("**Optional live web discovery**")
+    st.caption(
+        "Live search is OFF unless a key exists and you explicitly enable it. NitiKube also caps this page to a small number of calls per session. "
+        "This protects against accidental repeated calls, but the external account should still have provider-side billing/overage controls configured."
+    )
+    brave_key = _secret("BRAVE_API_KEY")
+    live_enabled = st.checkbox("Enable optional Brave discovery for this session", value=False, disabled=not bool(brave_key))
+    max_session_calls = int(os.getenv("NITIKUBE_MAX_LIVE_SEARCH_CALLS_PER_SESSION", "3"))
+    max_session_calls = max(0, min(max_session_calls, 20))
+    used = int(st.session_state.get("nitikube_live_search_calls", 0))
+    st.write(f"Session live-search budget: **{used}/{max_session_calls}** calls used")
+
+    if not brave_key:
+        st.info("No BRAVE_API_KEY is configured, so live discovery stays disabled and only direct retailer search links are available.")
+
+    if st.button("Run live discovery", disabled=not live_enabled):
+        if used >= max_session_calls:
+            st.error("Hard session search-call limit reached. NitiKube will not issue another live-search request in this session.")
+        else:
+            try:
+                st.session_state["nitikube_live_search_calls"] = used + 1
+                results = brave_web_search(query, brave_key, count=8)
+                st.session_state["nitikube_discovery_results"] = results
+            except Exception as exc:
+                st.error(f"Live discovery failed: {exc}")
+
+    live_results = st.session_state.get("nitikube_discovery_results")
+    if live_results:
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    {
+                        "title": item.title,
+                        "source": item.source,
+                        "url": item.url,
+                        "description": item.description,
+                        "meaning": "current search discovery only; specs/price/stock still require evidence",
+                    }
+                    for item in live_results
+                ]
+            ),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+with offer_tab:
+    st.subheader("Rank structured, evidence-carrying retailer offers")
+    st.write(
+        "Upload offers whose fields were copied from current product pages/datasheets or generated by a trusted adapter. Required-but-unknown specifications remain non-feasible. Price freshness requires an ISO timestamp."
+    )
+
+    template = {
+        "offers": [
+            {
+                "offer_id": "retailer-product-1",
+                "name": "Product name",
+                "category": "COB downlight",
+                "brand": "Brand",
+                "model": "Model / MPN",
+                "sku": "SKU if available",
+                "retailer": "Retailer",
+                "product_url": "https://retailer.example/product",
+                "source_url": "https://retailer.example/product",
+                "watts": None,
+                "lumens": None,
+                "kelvin": None,
+                "beam_angle_deg": None,
+                "cri": None,
+                "price": None,
+                "currency": "INR",
+                "availability": "unknown",
+                "warranty_months": None,
+                "delivery_location": None,
+                "checked_at": None,
+                "source_kind": "structured_input",
+                "notes": ["Template only. Nulls are unknowns, not failed specs."]
+            }
+        ]
+    }
+    st.download_button(
+        "Download structured offer template",
+        json.dumps(template, indent=2).encode("utf-8"),
+        "nitikube_product_offer_template.json",
+        "application/json",
+    )
+    uploaded = st.file_uploader("Upload product offer JSON", type=["json"], key="procurement_offer_json")
+
+    r1, r2, r3, r4 = st.columns(4)
+    req_category = r1.text_input("Required category", "COB downlight", key="rank_category")
+    lumens_min = r2.number_input("Lumens min", min_value=0.0, value=450.0, step=25.0)
+    lumens_max = r3.number_input("Lumens max", min_value=0.0, value=550.0, step=25.0)
+    cri_min = r4.number_input("CRI min", min_value=0.0, max_value=100.0, value=90.0, step=1.0)
+    r5, r6, r7, r8 = st.columns(4)
+    kelvin_req = r5.number_input("Kelvin required", min_value=1000, value=3000, step=100)
+    beam_req = r6.number_input("Beam target °", min_value=1.0, value=36.0, step=1.0)
+    beam_tol = r7.number_input("Beam tolerance ±°", min_value=0.0, value=3.0, step=1.0)
+    max_price = r8.number_input("Max price ₹ (0 = no cap)", min_value=0.0, value=0.0, step=50.0)
+
+    p1, p2, p3, p4 = st.columns(4)
+    require_price = p1.checkbox("Require verified price", value=True)
+    max_age_days = p2.number_input("Max price age (days)", min_value=0.0, value=7.0, step=1.0)
+    require_stock = p3.checkbox("Require in stock", value=False)
+    min_warranty = p4.number_input("Minimum warranty months (0 = none)", min_value=0.0, value=0.0, step=1.0)
+    delivery_location = st.text_input("Delivery location requirement (optional)", "Gurugram")
+    require_delivery = st.checkbox("Require evidence that the offer applies to this delivery location", value=False)
+
+    if uploaded:
+        try:
+            offers = load_offers_json(uploaded.getvalue())
+            req = ProductRequirement(
+                category=req_category,
+                lumens_min=float(lumens_min),
+                lumens_max=float(lumens_max),
+                kelvin_allowed=(int(kelvin_req),),
+                beam_angle_target_deg=float(beam_req),
+                beam_angle_tolerance_deg=float(beam_tol),
+                cri_min=float(cri_min),
+                max_price=float(max_price) if max_price > 0 else None,
+            )
+            procurement_req = ProcurementRequirement(
+                product_requirement=req,
+                currency="INR",
+                require_verified_price=require_price,
+                max_price_age_hours=float(max_age_days) * 24.0 if require_price else None,
+                require_in_stock=require_stock,
+                min_warranty_months=float(min_warranty) if min_warranty > 0 else None,
+                delivery_location=delivery_location or None,
+                require_delivery_location_match=require_delivery,
+            )
+            ranked = rank_offers(offers, procurement_req, now=datetime.now(timezone.utc))
+            ranked_df = pd.DataFrame(procurement_rows(ranked))
+            st.dataframe(ranked_df, use_container_width=True, hide_index=True)
+            feasible_count = sum(evaluation.feasible for _, evaluation in ranked)
+            if feasible_count:
+                st.success(f"{feasible_count} offer(s) satisfy every currently required specification/evidence constraint.")
+            else:
+                st.warning("No offer is fully feasible under the current evidence policy. Inspect failed/unknown fields rather than weakening requirements silently.")
+
+            st.write("**Best verified offer per explicit product identity**")
+            best = best_offer_per_product(offers, procurement_req, now=datetime.now(timezone.utc))
+            best_df = pd.DataFrame(
+                [
+                    {
+                        "identity": group.identity_key,
+                        "offer_count": len(group.offers),
+                        "selected_offer": offer.offer_id,
+                        "retailer": offer.retailer,
+                        "price": offer.price,
+                        "feasible": evaluation.feasible,
+                        "rank_score": evaluation.rank_score,
+                    }
+                    for group, offer, evaluation in best
+                ]
+            )
+            st.dataframe(best_df, use_container_width=True, hide_index=True)
+            st.caption("Deduplication is deliberately conservative: NitiKube merges only explicit brand+model or brand+SKU identities. It does not fuzzy-merge variants from similar titles.")
+
+            st.download_button(
+                "Download ranked procurement CSV",
+                ranked_df.to_csv(index=False).encode("utf-8"),
+                "nitikube_ranked_procurement.csv",
+                "text/csv",
+            )
+        except Exception as exc:
+            st.error(f"Offer ingestion/ranking failed: {exc}")
+    else:
+        st.info("Upload the template after filling real product evidence. NitiKube deliberately ships without fake market offers/prices.")
+
+with jsonld_tab:
+    st.subheader("Extract structured product proposals from a saved product page")
+    st.write(
+        "Many product pages embed schema.org JSON-LD. NitiKube can parse that structured data from an HTML file you upload. "
+        "The server does not fetch arbitrary user URLs here, avoiding an SSRF/privacy/security surface and avoiding hidden scraping."
+    )
+    html_file = st.file_uploader("Upload saved product-page HTML", type=["html", "htm"], key="product_html")
+    if html_file:
+        proposals = parse_product_html(html_file.getvalue())
+        if proposals:
+            proposal_df = pd.DataFrame(proposal_rows(proposals))
+            st.dataframe(proposal_df, use_container_width=True, hide_index=True)
+            st.download_button(
+                "Download JSON-LD extraction proposals CSV",
+                proposal_df.to_csv(index=False).encode("utf-8"),
+                "nitikube_product_jsonld_proposals.csv",
+                "text/csv",
+            )
+            st.warning(
+                "Extraction is a proposal, not verification. Before a price/spec enters procurement ranking as verified, confirm the page/source URL, timestamp and required technical fields. Retailer JSON-LD can be incomplete or stale."
+            )
+        else:
+            st.warning("No schema.org Product JSON-LD was found in the uploaded HTML.")
+    else:
+        st.info("Save a public product page as HTML and upload it here, or use the structured offer template directly.")
