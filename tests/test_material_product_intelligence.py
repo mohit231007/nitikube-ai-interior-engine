@@ -17,6 +17,19 @@ def test_verified_material_numeric_property_requires_provenance():
     assert numeric_property(record, "density", verified_only=True) is None
 
 
+def test_unverified_material_property_cannot_drive_verified_recommendation():
+    record = MaterialRecord(
+        material_id="m1",
+        name="Material",
+        category="test",
+        properties={
+            "density": MaterialProperty("density", 700, "kg/m3", EvidenceState.UNVERIFIED)
+        },
+    )
+    validation = validate_material(record)
+    assert validation.valid_for_verified_recommendation is False
+
+
 def test_verified_material_with_source_can_be_used():
     record = MaterialRecord(
         material_id="m1",
@@ -38,7 +51,7 @@ def test_verified_material_with_source_can_be_used():
     assert numeric_property(record, "density") == 700
 
 
-def test_product_match_does_not_treat_unknown_as_match():
+def test_product_unknown_required_spec_is_not_feasible():
     req = ProductRequirement(
         category="COB downlight",
         lumens_min=450,
@@ -57,7 +70,7 @@ def test_product_match_does_not_treat_unknown_as_match():
         cri=90,
     )
     result = match_product(product, req)
-    assert result.feasible is True
+    assert result.feasible is False
     assert "beam_angle" in result.unknown
     assert result.score < 100
 
@@ -70,9 +83,10 @@ def test_product_failed_spec_is_not_feasible():
     assert "cri" in result.failed
 
 
-def test_rank_products_prefers_higher_spec_match():
+def test_rank_products_prefers_complete_spec_match():
     req = ProductRequirement(category="COB downlight", lumens_min=450, lumens_max=550, cri_min=90)
     good = ProductSpecification("Good", "COB downlight", lumens=500, cri=95)
     incomplete = ProductSpecification("Incomplete", "COB downlight", lumens=500, cri=None)
     ranked = rank_products([incomplete, good], req)
     assert ranked[0][0].name == "Good"
+    assert ranked[0][1].feasible is True

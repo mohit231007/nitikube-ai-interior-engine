@@ -50,6 +50,7 @@ class MaterialValidation:
 def validate_material(record: MaterialRecord) -> MaterialValidation:
     errors: list[str] = []
     warnings: list[str] = []
+    has_unverified = False
     if not record.material_id.strip():
         errors.append("material_id is required")
     if not record.name.strip():
@@ -58,17 +59,19 @@ def validate_material(record: MaterialRecord) -> MaterialValidation:
         errors.append("material category is required")
     if not record.properties:
         warnings.append("material has no properties yet")
+        has_unverified = True
 
     for key, prop in record.properties.items():
         if key != prop.name:
             warnings.append(f"property key '{key}' differs from property name '{prop.name}'")
         ok, reason = validate_numeric_evidence(prop.as_evidence())
-        if not ok and prop.state == EvidenceState.VERIFIED:
+        if prop.state == EvidenceState.VERIFIED and not ok:
             errors.append(f"{record.material_id}.{key}: {reason}")
         elif prop.state == EvidenceState.UNVERIFIED:
+            has_unverified = True
             warnings.append(f"{record.material_id}.{key}: unverified and must not drive a verified recommendation")
 
-    return MaterialValidation(not errors, tuple(errors), tuple(warnings))
+    return MaterialValidation(not errors and not has_unverified, tuple(errors), tuple(warnings))
 
 
 def numeric_property(record: MaterialRecord, property_name: str, *, verified_only: bool = True) -> float | None:

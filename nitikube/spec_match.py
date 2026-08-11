@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Iterable
 
 
@@ -63,9 +63,10 @@ def match_product(product: ProductSpecification, req: ProductRequirement) -> Spe
     checks: list[tuple[str, bool | None]] = []
 
     checks.append(("category", product.category.casefold() == req.category.casefold()))
-    checks.append(("watts", _in_range(product.watts, req.watts_min, req.watts_max)))
-    checks.append(("lumens", _in_range(product.lumens, req.lumens_min, req.lumens_max)))
-
+    if req.watts_min is not None or req.watts_max is not None:
+        checks.append(("watts", _in_range(product.watts, req.watts_min, req.watts_max)))
+    if req.lumens_min is not None or req.lumens_max is not None:
+        checks.append(("lumens", _in_range(product.lumens, req.lumens_min, req.lumens_max)))
     if req.kelvin_allowed:
         checks.append(("kelvin", None if product.kelvin is None else product.kelvin in req.kelvin_allowed))
     if req.beam_angle_target_deg is not None:
@@ -86,12 +87,9 @@ def match_product(product: ProductSpecification, req: ProductRequirement) -> Spe
         else:
             unknown.append(name)
 
-    # Unknown facts are not treated as matches. Category mismatch is always fatal.
-    feasible = not failed
-    if checks:
-        score = 100.0 * len(matched) / len(checks)
-    else:
-        score = 0.0
+    # A required-but-unknown specification is not proof of feasibility.
+    feasible = not failed and not unknown
+    score = 100.0 * len(matched) / len(checks) if checks else 0.0
 
     return SpecificationMatch(
         product_name=product.name,
