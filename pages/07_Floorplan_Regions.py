@@ -20,7 +20,7 @@ wall_dilation = c2.slider("Wall/gap dilation (px)", 0, 12, 2, 1)
 min_rect = c3.slider("Minimum rectangularity", 0.20, 0.95, 0.45, 0.05)
 
 with st.expander("Optional verified scale calibration", expanded=False):
-    st.write("Provide one known plan distance and its pixel distance. This converts candidate pixel dimensions to feet. Use the multi-reference calibration page when precision matters.")
+    st.write("Provide one known plan distance and its pixel distance. This converts candidate pixel dimensions and image-relative positions to feet. Use the multi-reference calibration page when precision matters.")
     s1, s2 = st.columns(2)
     px_reference = s1.number_input("Verified reference pixel distance", min_value=0.01, value=500.0, step=1.0)
     ft_reference = s2.number_input("Known physical distance (ft)", min_value=0.01, value=10.0, step=0.25)
@@ -49,6 +49,7 @@ if uploaded:
             width_ft, height_ft, area_ft2 = candidate_dimensions_ft(c, feet_per_pixel)
             rows.append({
                 "candidate": f"R{c.candidate_id}",
+                "room_name": f"Room {c.candidate_id}",
                 "x_px": c.x,
                 "y_px": c.y,
                 "width_px": c.width_px,
@@ -56,8 +57,10 @@ if uploaded:
                 "component_area_px": c.area_px,
                 "rectangularity": round(c.rectangularity, 3),
                 "heuristic_score": round(c.heuristic_score, 1),
-                "width_ft_from_scale": round(width_ft, 2),
-                "height_ft_from_scale": round(height_ft, 2),
+                "x_ft_from_scale": round(c.x * feet_per_pixel, 3),
+                "y_ft_from_scale": round(c.y * feet_per_pixel, 3),
+                "width_ft_from_scale": round(width_ft, 3),
+                "height_ft_from_scale": round(height_ft, 3),
                 "component_area_ft2": round(area_ft2, 2),
             })
         df = pd.DataFrame(rows)
@@ -69,11 +72,12 @@ if uploaded:
                 st.success(f"{len(selected)} region(s) marked user-verified for this session.")
                 st.dataframe(verified_df, use_container_width=True, hide_index=True)
                 st.download_button(
-                    "Download verified region table",
+                    "Download verified region table for Geometry Editor",
                     verified_df.to_csv(index=False).encode("utf-8"),
                     "nitikube_verified_regions.csv",
                     "text/csv",
                 )
+                st.caption("The CSV now carries image-relative x/y coordinates converted through the same verified scale, so the next Geometry Editor can preserve relative room positions instead of laying regions out arbitrarily.")
             else:
                 st.warning("No regions are verified yet. NitiKube should not route these CV proposals into final BOQ/lighting/material calculations as authoritative room geometry.")
         else:
