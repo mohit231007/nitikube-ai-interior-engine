@@ -2,311 +2,390 @@
 
 **Product:** NitiKube AI / Interior DesignOS  
 **Core rule:** **No recommendation without reasoning.**  
-**Current capability milestone:** **v0.26 — service-aware whole-home candidate factory**.
+**Current capability milestone:** **v0.30 — verified-network whole-home planning + routed drainage/electrical engineering layers**.
 
-This file is deliberately conservative. **Implemented** means code exists in this repository with deterministic tests/guardrails; it does **not** mean every module is production-certified or that NitiKube can replace licensed professionals for regulated work.
+This file is deliberately conservative. **Implemented** means deterministic code, evidence contracts and tests exist in this repository. It does **not** mean every module is production-certified or that NitiKube can replace licensed architects, structural engineers, MEP engineers, electricians, plumbers or other regulated professionals.
 
 ---
 
-## 1. Product architecture now implemented
+# 1. Current architecture
 
 ```text
-floor plan / verified dimensions / homeowner brief / product & material evidence
+floor plan / verified dimensions / homeowner brief / location / budget
                                   │
                                   ▼
                           VERIFICATION GATE
                                   │
-                 ┌────────────────┼────────────────┐
-                 ▼                ▼                ▼
-             GEOMETRY         SERVICES         EVIDENCE
-                 │                │                │
-                 ├───────────────┬┴───────────────┤
-                 ▼               ▼                ▼
-          ROOM CANDIDATES   HARD FEASIBILITY   STANDARDS /
-          + QUANTITIES        FILTERS          MATERIALS
-                 │               │                │
-                 └───────────────┼────────────────┘
-                                 ▼
-                       OPTIMIZER-READY OPTIONS
-                                 │
-                                 ▼
-                       WHOLE-HOME OPTIMIZATION
-                                 │
-                                 ▼
-                       HASHED DESIGN PACKAGE
-                                 │
-                ┌────────────────┼────────────────┐
-                ▼                ▼                ▼
-               3D          PROCUREMENT/BOQ     FINAL REPORT
+                                  ▼
+                         VERIFIED GEOMETRY
+                                  │
+          ┌───────────────────────┼────────────────────────┐
+          ▼                       ▼                        ▼
+  room candidate generation   openings/keepouts     service evidence
+          │                       │                        │
+          └───────────────┬───────┴───────────────┬────────┘
+                          ▼                       ▼
+                    GEOMETRY GATE        VERIFIED SERVICE NETWORK
+                          │               walls / shafts / risers
+                          │                       │
+                          └──────────────┬────────┘
+                                         ▼
+                           CANDIDATE SERVICE GATE
+                                         │
+                 ┌───────────────────────┼───────────────────────┐
+                 ▼                       ▼                       ▼
+          drainage profile        electrical route        other future MEP
+          fall / slope            voltage drop/loss       discipline checks
+                 │                       │                       │
+                 └───────────────────────┼───────────────────────┘
+                                         ▼
+                             EXPLICIT COST + SCORES
+                                         │
+                                         ▼
+                            WHOLE-HOME OPTIMISATION
+                                         │
+                 ┌───────────────────────┼───────────────────────┐
+                 ▼                       ▼                       ▼
+               BOQ                  PROCUREMENT                 3D
+                 │                       │                       │
+                 └───────────────────────┼───────────────────────┘
+                                         ▼
+                              HASHED DESIGN PACKAGE
+                                         │
+                                         ▼
+                                FINAL DESIGN REPORT
 ```
 
-**AI does not own engineering arithmetic.** AI/ML/CV may propose, classify, rank or explain. Deterministic tested code owns geometry, quantities, physics, evidence-state logic, hard constraints and optimization arithmetic.
+The system increasingly separates five different questions that conventional AI interior tools often mix together:
+
+1. **What geometry is actually verified?**
+2. **Which layouts physically fit?**
+3. **Can required services actually reach the proposed fixture/appliance through verified building routes?**
+4. **Do discipline-specific calculations pass the explicit sourced engineering inputs?**
+5. **Which surviving design is preferable under budget and homeowner priorities?**
 
 ---
 
-# 2. Verified geometry + floor-plan foundation
+# 2. Verified floor-plan / geometry foundation
 
-## Implemented
+Implemented:
 
-- feet/inches and ft²/m² conversion
-- rectangle and arbitrary-polygon area
-- polygon centroid and validation
-- self-intersection / zero-edge checks
-- verified room and verified opening schemas
-- opening-on-boundary validation
-- shared-boundary / room adjacency graph
-- deterministic fixture-grid coordinates
-- user-verified pixel → physical scale calibration
-- multi-reference calibration disagreement/spread reporting
-- pixel polygon → physical area conversion
-- OpenCV line-detection baseline
-- heuristic enclosed/free-space region proposals
-- explicit verification gate before CV proposals become trusted geometry
-- verified-region CSV/JSON exports
-- deterministic geometry editor workflow
-- exact-rectangle validation for rectangle-only room planners
-- explicit refusal to replace unsupported non-rectangular verified rooms with bounding boxes
+- OpenCV floor-plan line/region proposal baseline;
+- verification-first CV semantics;
+- pixel → physical scale calibration;
+- multi-reference scale disagreement checks;
+- verified room polygons;
+- verified openings;
+- room-region proposals;
+- room adjacency / topology primitives;
+- polygon area / centroid maths;
+- SVG verified-geometry export;
+- rectangle-support checks that refuse unsupported irregular geometry rather than silently replacing it with a bounding box;
+- opening-to-room boundary linkage.
 
-## Not yet production-complete
+Still not production-complete:
 
-- robust room/wall/door/window/column/stair extraction from arbitrary real plans
-- production dimension OCR
-- perspective/skew correction for photographed plans
-- wall-thickness reconstruction
-- automatic door-swing interpretation
-- exact opening sill/head heights
-- large real-world floor-plan regression corpus
-- arbitrary-polygon furniture/cabinet planners across all room types
+- robust dimension OCR with source bounding boxes/confidence;
+- wall centreline/thickness extraction;
+- door/window/column/stair detection at production accuracy;
+- perspective correction for photographed plans;
+- interactive drag-handle correction workflow;
+- large real-world regression set across CAD, builder plans, scans and camera photos.
 
 ---
 
-# 3. Lighting engineering
+# 3. Lighting / photometry
 
-## Implemented
+Implemented:
 
-- lumen-method arithmetic
-- maintained-lux estimate
-- COB beam diameter
-- beam-spacing / overlap diagnostics
-- constrained fixture-count/grid search
-- deterministic SVG lighting layouts
-- IES LM-63 numeric parser for supported Type-C photometry
-- fail-closed unsupported tilt / Type A/B / partial-symmetry handling
-- candela interpolation
-- point-by-point direct horizontal illuminance
-- multi-fixture superposition
-- maintenance factor
-- point-grid min/average/max lux
-- uniformity ratios
-- explicit target-band coverage
-- IES Photometry Lab
+- lumen method;
+- maintained lux calculations;
+- COB beam-diameter geometry;
+- 36° COB analysis;
+- fixture-grid generation;
+- constrained fixture optimisation;
+- Type-C IES point-by-point subset;
+- point-grid illuminance metrics;
+- heatmap-ready illuminance data;
+- fail-closed unsupported photometric cases.
 
-## Important boundary
+Important boundary:
 
-Current IES calculation is direct illuminance only. It does not yet claim full interreflection, UGR/glare certification, daylight integration or lighting-code compliance.
+A beam angle or lumen number is not treated as sufficient evidence for a complete photometric design when the fixture distribution/IES data required by the selected model are absent.
 
 ---
 
-# 4. Room-specific deterministic planners
+# 4. Deterministic room planners
 
 ## Drawing / dining
 
 Implemented:
 
-- deterministic living/dining zone variants
-- sofa-wall alternatives
-- dining-table rotation alternatives
-- collisions
-- pair gaps
-- wall margins
-- clearance envelopes
-- verified-opening keepouts
-- circulation raster metrics
-- SVG output
-- whole-home optimizer package bridge
+- deterministic furniture geometry;
+- living/dining zoning;
+- sofa / TV-console arrangements;
+- coffee-table placement;
+- dining-table orientation alternatives;
+- collision checks;
+- keepouts;
+- pair gaps;
+- circulation grid metrics;
+- geometry-only score.
 
 ## Kitchen
 
 Implemented:
 
-- one-wall layouts
-- galley layouts
-- L-shape layouts
-- U-shape layouts
-- sink / hob / fridge work-centre placement
-- module-fit checks
-- work-triangle leg/perimeter/area arithmetic
-- optional explicit triangle constraints
-- opening collisions
-- passage-width connectivity
-- gross counter run
-- non-double-counted countertop union area
-- base/wall cabinet quantity envelopes
-- explicit countertop waste factor
-- optimizer package bridge
+- one-wall families;
+- galley families;
+- L-shape families;
+- U-shape families;
+- counter-run geometry;
+- sink / hob / fridge work centres;
+- explicit work-triangle calculations;
+- opening / keepout collision checks;
+- passage connectivity;
+- countertop union area;
+- cabinet/countertop quantity envelopes;
+- deterministic SVG output.
 
-Not yet production-complete:
+Still needed:
 
-- exact plumbing/drain/electrical/gas/ventilation routing
-- manufacturer appliance-clearance rules at useful scale
-- cabinet-module libraries
-- corner hardware / shutter / drawer manufacturing logic
-- arbitrary-polygon kitchen generation
+- arbitrary-polygon kitchen planning;
+- manufacturer appliance clearances;
+- corner-module libraries;
+- detailed cabinetry modules;
+- slab nesting / seam optimisation;
+- discipline-specific kitchen plumbing/gas/electrical/ventilation rules.
 
-## Bedroom + wardrobe
+## Bedroom / wardrobe
 
 Implemented:
 
-- bed-wall alternatives
-- wardrobe-wall alternatives
-- optional desk alternatives
-- directional side/foot bed clearances
-- wardrobe-front access zones
-- collisions / opening keepouts / circulation
-- wardrobe run / front area / geometric volume
-- optimizer package bridge
+- bed wall alternatives;
+- wardrobe wall alternatives;
+- optional desk alternatives;
+- side / foot clearance zones;
+- wardrobe-front access zone;
+- furniture collisions;
+- opening keepouts;
+- circulation connectivity;
+- wardrobe front area / volume quantities;
+- deterministic geometry scoring.
 
-Not yet production-complete:
+Still needed:
 
-- bedside-table generation
-- window/radiator/electrical constraints at full fidelity
-- TV sightline integration
-- wardrobe compartment/internal-storage optimization
-- arbitrary-polygon bedroom generation
+- bedside-table systems;
+- internal wardrobe compartment optimisation;
+- storage-demand modelling;
+- TV sightline integration;
+- HVAC/radiator/socket/switch constraints;
+- sliding/hinged wardrobe-door kinematics.
 
 ## Bathroom
 
 Implemented:
 
-- shower-corner variants
-- WC-wall variants
-- basin-wall variants
-- fixture collisions
-- directional fixture-front clearances
-- opening keepouts
-- circulation
-- floor/wall tile quantities
-- opening deductions
-- waterproofing quantities
-- ACH → exhaust-CFM arithmetic
-- drainage-run slope/fall arithmetic
-- optimizer package bridge
+- shower corner alternatives;
+- WC and basin wall alternatives;
+- fixture-front clearance zones;
+- collision/keepout checks;
+- circulation metrics;
+- floor/wall tile quantities;
+- waterproofing quantity envelopes;
+- ACH → CFM arithmetic;
+- simple drainage run → fall arithmetic;
+- deterministic SVG output.
 
-Not yet production-complete:
+Still needed:
 
-- exact drain coordinates + routed slope networks
-- floor slope-field modeling
-- plumbing fixture connection libraries
-- wet-zone electrical rules at jurisdiction scale
-- exact shower/door swing geometry
-- arbitrary-polygon bathroom generation
+- arbitrary-polygon bathroom planning;
+- shower-screen / door-swing geometry;
+- detailed wet-zone electrical rules;
+- manufacturer fixture clearances;
+- waterproofing system details;
+- plumbing stack and route-aware fixture generation.
 
 ---
 
-# 5. Whole-home candidate generation — v0.23
+# 5. Geometry / circulation / ergonomics primitives
 
-## Implemented
+Implemented:
 
-The Whole-Home Candidate Factory connects verified geometry directly to the deterministic room planners.
+- axis-aligned rectangle maths;
+- polygon shoelace area;
+- rectangle containment;
+- overlap/collision checks;
+- shortest rectangle gap;
+- opening keepouts;
+- rasterised passage-width connectivity;
+- obstacle inflation / Minkowski-style passage approximation;
+- furniture-fit reasoning;
+- drawing/dining and room-specific geometry metrics.
 
-It now supports:
+These metrics are geometry diagnostics. They are not silently labelled as building-code compliance.
 
-- room-aware design-brief template from verified geometry
-- deterministic room-role inference from explicit room names
-- explicit role override
-- ambiguous/anonymous room fail-closed behavior
-- dispatch to drawing/dining, kitchen, bedroom/wardrobe and bathroom planners
-- unified room/candidate audit
-- hard geometry rejection
-- globally unique option IDs:
+---
+
+# 6. Climate / geography / building physics
+
+Implemented foundation includes:
+
+- climate adapter architecture;
+- historical/current climate variable interfaces;
+- dew-point / condensation checks;
+- R-value / U-value arithmetic;
+- conductive heat-flow maths;
+- solar geometry / shadow diagnostics;
+- first-order acoustics / RT60;
+- electrical resistance / load / energy / voltage-drop arithmetic primitives;
+- explicit safety/model-boundary warnings.
+
+The system does not ship fake geography-specific standards simply because a city name is known.
+
+---
+
+# 7. Materials / product / procurement evidence
+
+Implemented:
+
+- material evidence states;
+- material provenance model;
+- material suitability/conflict primitives;
+- specification-first product query building;
+- deterministic specification matching;
+- required-but-unknown specifications are not treated as matches;
+- verified price state requires source + timestamp;
+- optional search-adapter / retailer-search architecture;
+- locality-aware product lookup architecture;
+- quantity-driven procurement linkage foundation.
+
+Still needed at production scale:
+
+- manufacturer datasheet ingestion;
+- normalized material property corpus;
+- water absorption / density / thermal / VOC / UV / abrasion / slip / fire fields where applicable;
+- source conflict resolution;
+- pack/slab/module constraints;
+- live lawful retailer/provider adapters;
+- current stock and local delivery state;
+- warranty extraction;
+- product variant deduplication;
+- public-scale quota accounting.
+
+---
+
+# 8. Quantity / BOQ / quotation audit
+
+Implemented:
+
+- tile quantities;
+- board/panel quantities;
+- paint quantities;
+- explicit wastage;
+- BOQ primitives;
+- CSV/XLSX quotation import;
+- semantic column mapping;
+- quantity × rate arithmetic audit;
+- discrepancy states;
+- insufficient-data states;
+- downloadable audit outputs.
+
+---
+
+# 9. Budget / optimisation
+
+Implemented:
+
+- budget envelopes;
+- protected reserve;
+- weighted option utility;
+- Pareto pruning;
+- cross-room whole-home optimiser;
+- one option per required room;
+- room policies;
+- must-not-compromise constraints;
+- homeowner locks;
+- required-room coverage checks;
+- infeasible combination detection;
+- deterministic scenario optimisation.
+
+Critical invariant:
 
 ```text
-<room_id>::<role>::<planner_layout_id>
+geometry/service infeasible option
+        cannot become feasible
+        because its preference score is high
 ```
-
-- explicit required-room scope
-- no silent dropping of incomplete required rooms
-- optimizer promotion only after explicit cost + five decision scores exist
-- optional explicit geometry-score blending
-- direct whole-home optimization
-- direct hashed design-package generation
-
-## Permanent score boundary
-
-A planner `geometry_score` is **not** silently re-labelled as aesthetics, comfort, quality, durability or maintainability.
-
-If a caller wants deterministic geometry blended into a decision score, the brief must explicitly define that mapping.
 
 ---
 
-# 6. Verified service-point evidence — v0.24
+# 10. v0.23 — Whole-Home Candidate Factory
 
-## Implemented
+Implemented bridge from verified geometry to the full deterministic room-planning stack:
 
-NitiKube now has a dedicated service-location evidence layer.
+- parses authoritative `nitikube.verified_geometry`;
+- deterministic room-role inference from explicit room names;
+- explicit role override in brief;
+- ambiguous/anonymous rooms remain unresolved;
+- dispatches supported rooms to drawing/dining, kitchen, bedroom and bathroom planners;
+- exact rectangle support checks;
+- no hidden bounding-box substitution for unsupported polygons;
+- verified opening keepouts;
+- room candidate audits;
+- globally unique option IDs;
+- explicit cost models;
+- explicit five-score promotion contract;
+- required-room scope;
+- direct whole-home optimisation;
+- provenance-preserving design package;
+- geometry + option artifact SHA-256.
 
-Supported service kinds include:
+Streamlit:
 
-- cold water
-- hot water
-- drain
-- electrical
-- gas
-- exhaust
-- data
-- HVAC condensate
-- other
+- **Page 24 — Whole-Home Candidate Factory**.
+
+---
+
+# 11. v0.24 — Verified Service Points + Straight-Line Routing
+
+Implemented explicit service evidence for:
+
+- cold water;
+- hot water;
+- drain;
+- electrical;
+- gas;
+- exhaust;
+- data;
+- HVAC condensate;
+- other service kinds.
 
 Capabilities:
 
-- `nitikube.service_points` artifact
-- verified point coordinates tied to authoritative `room_id`
-- XY + optional Z coordinates
-- validation that service points lie within the declared verified room
-- empty room-aware service-point template — **no service location is invented from room type**
-- explicit service targets
-- explicit allowed service kinds
-- optional maximum route distance
-- required vs optional requirements
-- plan and 3D distance modes
-- fail-closed unknown Z in required 3D links
-- same-room matching
-- verified-only matching
-- exact minimum-total-distance unique assignment when sharing is disabled
-- explicit shared-point mode when sharing is intentionally allowed
-- kitchen target adapters: sink / hob / fridge
-- bathroom target adapters: shower / WC / basin
-- bedroom target adapters: bed / wardrobe / desk
-- generic layout target adapters
-- downloadable routing-evaluation JSON
+- room-linked XY and optional Z coordinates;
+- verified state + source/note;
+- service-point validation against verified room geometry;
+- explicit service targets;
+- allowed service kinds;
+- required vs optional service requirements;
+- plan / 3D distances;
+- optional explicit maximum route distance;
+- exact minimum-total-distance assignment when points cannot be shared;
+- explicit shared-point mode;
+- target adapters for kitchen, bathroom, bedroom and generic layouts.
 
-## Current routing boundary
+This layer is retained as a simple lower-bound model but is no longer the strongest available routing model.
 
-Current route distance is a **straight-line lower bound**.
+Streamlit:
 
-It is not yet:
-
-- wall/shaft-aware routed pipe length
-- routed cable length
-- routed duct length
-- pressure-drop calculation
-- drainage hydraulics
-- pipe sizing
-- voltage-drop calculation
-- electrical circuit/load sizing
-- ventilation pressure-loss calculation
-- gas-system safety design
-- code certification
+- **Page 25 — Verified Service Points + Routing Lab**.
 
 ---
 
-# 7. Service-aware candidate feasibility — v0.25
+# 12. v0.25 — Service-Aware Candidate Feasibility
 
-## Implemented
-
-Verified services can now reject otherwise valid room candidates.
-
-Permanent rule:
+Implemented permanent hard-gate semantics:
 
 ```text
 overall_feasible = geometry_feasible AND service_feasible
@@ -314,457 +393,539 @@ overall_feasible = geometry_feasible AND service_feasible
 
 Capabilities:
 
-- `nitikube.candidate_service_rules`
-- candidate-specific target-coordinate evaluation
-- missing required target → failure
-- missing optional target → warning
-- kitchen service-aware candidate wrappers
-- bathroom service-aware candidate wrappers
-- bedroom/wardrobe service-aware candidate wrappers
-- drawing/dining service-aware candidate wrappers
-- service feasibility does not rewrite geometry score
-- service route distance is only a transparent tie-breaker after hard feasibility + geometry score
-- downloadable combined candidate evaluation
+- candidate-specific service rules;
+- required/optional missing-target semantics;
+- actual candidate target coordinates;
+- service feasibility before preference ranking;
+- service failures cannot be rescued by geometry score;
+- geometry failures cannot be rescued by service success;
+- route distance used only as transparent tie-break evidence, not hidden aesthetics/quality scoring.
 
-This means, for example, two geometrically valid kitchen layouts can receive different feasibility outcomes because their actual sink locations have different relationships to the verified water/drain evidence.
+Streamlit:
+
+- **Page 26 — Service-Aware Candidate Lab**.
 
 ---
 
-# 8. Service-aware whole-home optimization — v0.26
+# 13. v0.26 — Service-Aware Whole-Home Factory
 
-## Implemented
-
-The v0.24/v0.25 service evidence layer is now wired into the v0.23 Whole-Home Candidate Factory.
-
-Pipeline:
+Implemented integration of service feasibility into the whole-home optimisation pipeline:
 
 ```text
 verified geometry
-+ room/design brief
++ explicit brief
 + verified service points
-→ deterministic room candidates
+→ room candidates
 → geometry gate
-→ candidate-specific service gate
-→ feasible optimizer options
-→ whole-home optimization
+→ service gate
+→ optimizer options
+→ whole-home optimisation
 → hashed design package
 ```
 
-Room service states are explicit:
+Capabilities:
 
-- `evaluated`
-- `not_configured`
-- `blocked`
-- `not_evaluated_base_room_blocked`
+- room service states: evaluated / not configured / blocked / base-room blocked;
+- exact raw-candidate ID reconciliation before target recovery;
+- service-filtered optimizer options;
+- required-room viability gate;
+- service-point SHA-256 provenance;
+- service-aware brief SHA-256 provenance;
+- v0.26 package re-hash.
 
-A room without service rules is **not** reported as a fake PASS.
+Streamlit:
 
-Additional v0.26 guarantees:
-
-- raw candidate regeneration must reproduce the exact v0.23 candidate IDs before service evidence is bound to them
-- service failures/warnings remain separately identified
-- service route metrics appear only after service evaluation
-- service-blocked candidates are marked infeasible before optimization
-- each required room must retain at least one feasible optimizer option
-- service-blocked required rooms are never silently removed
-- final package hash covers:
-  - geometry artifact
-  - generated option artifact
-  - verified service-point artifact
-  - service-aware whole-home brief
-- existing package hash verification remains valid
+- **Page 27 — Service-Aware Whole-Home Candidate Factory**.
 
 ---
 
-# 9. Materials + product evidence
-
-## Implemented
-
-- tile / board / panel quantities with explicit waste
-- paint quantities using explicit coverage inputs
-- provenance-aware material-property model
-- verified numeric facts require source + timestamp
-- unverified values cannot silently drive verified recommendations
-- empty production material registry rather than invented facts
-- deterministic product-spec matching
-- matched / failed / unknown product criteria
-- datasheet ingestion/extraction workflow
-- product source/verification state
-
-## Not yet production-complete
-
-- large legally sourced manufacturer material corpus
-- automated product-spec ingestion at market scale
-- verified pack/slab/board size catalog coverage
-- broad regional availability/inventory
-
----
-
-# 10. Standards / guidance evidence — v0.18+
-
-## Implemented
-
-- provenance-first rule registry
-- rule ID / subject / metric / operator / value / unit
-- room/applicability tags
-- mandatory state
-- authority / jurisdiction / document version
-- source URL / checked timestamp / locator
-- deterministic compatible-unit comparison
-- PASS / FAIL / UNKNOWN / NOT_APPLICABLE states
-- applicability context
-- conflict detection for disjoint same-scope numeric intervals
-- JSON/CSV ingestion
-- no production numeric standard corpus bundled by default
-
-## Important boundary
-
-The engine is a standards-evidence framework, not a legal interpretation service and not a redistribution mechanism for copyrighted/paywalled standards.
-
-A useful production corpus still needs lawful sourcing and jurisdiction-specific professional review.
-
----
-
-# 11. Building physics
-
-## Implemented
-
-- dew point
-- first-order condensation-risk check
-- thermal-layer resistance
-- assembly U-value
-- conductive heat flow
-- latitude/day/solar-time solar geometry
-- first-pass shadow geometry
-- Sabine RT60 acoustics
-- free-field SPL-distance diagnostic
-- connected/diversified electrical-load arithmetic
-- single-phase current equation
-- energy arithmetic
-- conductor resistance + voltage-drop math using explicit resistivity
-
-## Not yet production-complete
-
-- whole-building dynamic simulation
-- validated design-day climate datasets at production scale
-- detailed daylight simulation
-- CFD
-- professional electrical design automation
-- structural/seismic engineering
-
----
-
-# 12. Climate + geography
-
-## Implemented
-
-- geocoding/climate adapter framework
-- historical climate comparison workflow
-- solar-geometry inputs tied to location
-- explicit provenance/freshness concepts
-
-## Not yet production-complete
-
-- long-horizon production design-weather corpus
-- climate-zone regulatory mapping at jurisdiction scale
-- detailed daylight/solar obstruction model
-
----
-
-# 13. Lifecycle material value
-
-## Implemented
-
-- material + labour installed cost
-- explicit material waste
-- annual maintenance cash flows
-- service-life replacements
-- disposal/replacement costs
-- explicit escalation
-- present-value discounting
-- optional residual service-value credit
-- equivalent annual cost
-- NPV per area
-- verified / user-provided / unverified evidence states
-- feature-based substitution filters
-- separate performance score
-- cost × performance Pareto frontier
-- deterministic low/base/high sensitivity multipliers
-
-## Important boundary
-
-Sensitivity bands are what-if scenarios, not statistical confidence intervals.
-
-Missing service life/cost evidence remains unavailable rather than being filled with zero.
-
----
-
-# 14. Procurement + quotation + execution
-
-## Implemented
-
-- specification-first search-query builder
-- optional search adapter + zero-cost fallbacks
-- price verification state with source/timestamp
-- BOQ quantity audit primitives
-- CSV/XLSX quotation ingestion
-- explicit quotation column mapping
-- `quantity × rate` arithmetic validation
-- quotation audit export
-- dependency-graph execution scheduling
-- cycle detection
-- earliest start/finish
-- critical path
-- simple cumulative task-cost timing
-
-## Not yet production-complete
-
-- broad live inventory integrations
-- PDF/photo quotation OCR at production quality
-- automated vendor normalization
-- procurement order/payment integrations
-- site-progress telemetry
-
----
-
-# 15. Whole-home optimizer + project orchestration
-
-## Implemented
-
-- one design package per required room
-- additive utility across explicit decision dimensions
-- normalized user weights
-- global budget coupling
-- protected reserve
-- exact dynamic-programming Pareto-state pruning
-- homeowner locks
-- hard room policies before scoring
-- verified-geometry fit constraints
-- explicit infeasible states
-- Value/Balanced/Full-budget scenario support
-- multi-artifact room-option merge
-- global option-ID uniqueness
-- strict room-ID linkage to verified geometry
-- complete vs partial project scope
-- SHA-256 artifact fingerprints
-- selected-option source provenance
-- deterministic design-package manifest/hash
-- tamper/hash verification
-- professional-verification flags preserved into the package
-
----
-
-# 16. Privacy + zero-paid-cost guardrails
-
-## Implemented
-
-- provider/operation policy
-- per-session call cap
-- declared estimated cost/call
-- paid-usage enabled/disabled switch
-- explicit paid-cost cap
-- positive-cost call blocked before execution when paid usage is disabled
-- authorized usage ledger
-- sensitivity classes for floor plans / home photos / quotations / verified geometry
-- raw sensitive artifact retention disabled by default
-- external sensitive transfer disabled by default
-- optional explicit user-consent requirement
-- metadata-only telemetry primitives
-- hashes / byte size / MIME / sensitivity without raw content
-
-## Important limitation
-
-Application-session caps alone cannot truthfully guarantee ₹0 account-wide public usage. Production zero-cost guarantees still require provider-side spending/overage caps and/or shared persistent quota accounting.
-
----
-
-# 17. 3D visualization
-
-## Implemented
-
-- simple-polygon ear-clipping triangulation
-- clockwise/counter-clockwise polygon support
-- concave polygon support
-- deterministic room floor meshes
-- wall-edge extrusion
-- optional ceiling meshes
-- parametric object boxes
-- verified opening overlays
-- `nitikube.scene3d` export
-- interactive Plotly 3D
-- self-contained HTML export
-- no mandatory paid rendering/image-generation API
-
-## Not yet production-complete
-
-- wall-thickness solids
-- Boolean door/window openings
-- planner-native object transfer across every room planner
-- parametric cabinetry/sanitaryware libraries
-- material/product textures
-- photorealistic rendering
-- IES/daylight overlay in 3D
-
----
-
-# 18. Final report + handoff
-
-## Implemented
-
-- requires `nitikube.design_package`
-- package SHA verification by default
-- explicit forensic override for invalid hash
-- optional standards/lifecycle attachments
-- selected vs required room audit
-- open professional-verification flags
-- standards PASS/FAIL/UNKNOWN/N/A summary
-- lifecycle feasible/non-feasible summary
-- provenance display
-- escaped untrusted strings
-- deterministic report ID
-- self-contained print-friendly HTML
-- browser Print → Save as PDF path
-- structured audit JSON
-
-The final report is a coordination/decision artifact, not a stamped architectural/structural/electrical/plumbing approval.
-
----
-
-# 19. Streamlit application pages
-
-Current application pages now extend through:
-
-1. Main app
-2. Ergonomics + BOQ
-3. Optimizers
-4. Materials + Products
-5. Plan Calibration + Export
-6. Building Physics
-7. Quotation + Execution
-8. Floor-plan Regions
-9. Verified Geometry Editor
-10. Material Datasheet Lab
-11. Climate Comparison
-12. Procurement Intelligence
-13. Whole-Home Optimizer
-14. Drawing / Dining Layout Generator
-15. IES Photometry Lab
-16. Kitchen Planner
-17. Bedroom + Wardrobe Planner
-18. Bathroom Planner
-19. Project Orchestrator
-20. Standards / Guidance Evidence Lab
-21. Lifecycle Material Value
-22. Privacy + Zero-Paid-Cost Guardrails
-23. Verified-Geometry 3D Scene Viewer
-24. Final Design Package Report
-25. Whole-Home Candidate Factory
-26. Verified Service Points + Routing Lab
-27. Service-Aware Candidate Lab
-28. Service-Aware Whole-Home Candidate Factory
-
-> File numbering currently reflects repository page filenames rather than this conceptual list; the newest repository pages are `24_Whole_Home_Candidate_Factory.py`, `25_Service_Points_and_Routing.py`, `26_Service_Aware_Candidate_Lab.py`, and `27_Service_Aware_Whole_Home_Factory.py`.
-
----
-
-# 20. Test / CI posture
-
-## Implemented
-
-- Python 3.11 + 3.12 core CI
-- compile-all checks
-- deterministic pytest suite
-- Streamlit import/smoke checks
-- page-specific smoke workflows for newer capability layers
-- fail-closed tests for unsupported/unknown states
-- reproducibility/hash tests
-- optimizer exactness tests
-- planner geometry/quantity tests
-- IES tests
-- standards/lifecycle/privacy tests
-- service-routing tests
-- service-aware candidate tests
-- service-aware whole-home factory tests
-
-The suite is meaningful but does not replace real-home validation and professional domain review.
-
----
-
-# 21. Major remaining production gaps
-
-The largest remaining gaps are now clearer.
-
-## A. Floor-plan intelligence
-
-- reliable OCR/dimension understanding
-- robust CV room/wall/opening semantics
-- arbitrary-polygon room planning
-- larger regression datasets
-
-## B. Service-network engineering
-
-- wall/shaft/riser-aware routed paths
-- cross-room service networks
-- drainage slope-network routing
-- plumbing hydraulics / sizing
-- electrical load/circuit/voltage-drop integration
-- ventilation pressure-loss / duct routing
-- manufacturer/service-point clearance integration
-
-## C. Evidence scale
-
-- lawful jurisdiction-specific standards corpus
-- manufacturer/material/product corpus
-- broad regional live pricing and inventory
-- verified labour-rate evidence
-
-## D. Design depth
-
-- kitchen cabinet-module optimization
-- wardrobe internal-compartment optimization
-- bathroom slope/drain planning
-- richer room types
-- full planner-native 3D objects
-
-## E. AI / ML layer
-
-- grounded explanation/search over verified NitiKube artifacts
-- preference/style learning
-- local/browser-friendly AI options where practical
-- stronger CV/ML plan interpretation
-- explicit privacy/budget gates around every external AI/search call
-
-## F. Production platform
-
-- authentication/projects/storage
-- persistent audit trail
-- shared quota/billing protection
-- telemetry/privacy controls
-- deployment hardening
-- end-to-end regression tests on real homes
-
----
-
-# 22. Current product truth
-
-NitiKube is **no longer just a room calculator or AI interior mock-up**.
-
-The repository now contains a deterministic, evidence-first chain from verified geometry through room candidate generation, service-aware feasibility, whole-home optimization, artifact provenance, 3D visualization and final reporting.
-
-The strongest current differentiator is not photorealism. It is the ability to say:
-
-> **Why is this option being recommended, what evidence/calculation supports it, what remains unknown, what failed, and which professional checks are still open?**
-
-The next major engineering frontier is:
+# 14. v0.27 — Verified Wall / Shaft / Riser Service Network
+
+This replaces the strongest remaining weakness in v0.24–v0.26: conceptual straight-line routes through building fabric.
+
+Implemented `nitikube.service_network` with:
+
+- explicit network nodes;
+- XY + optional Z coordinates;
+- optional room linkage;
+- route classes;
+- target-access eligibility;
+- verified/source/note provenance;
+- service-kind-specific edges;
+- directed or bidirectional edges;
+- explicit surveyed edge-length override;
+- explicit service-point → network-node attachment;
+- graph validation;
+- service-kind-compatible Dijkstra shortest path;
+- plan / 3D routing;
+- fail-closed missing-Z geometry-derived 3D paths;
+- verified-only default;
+- same-room target-access default;
+- bounded target → access-node connector;
+- exact multi-requirement assignment;
+- downloadable network-routing evaluation.
+
+Critical invariant:
 
 ```text
-arbitrary real floor plan
-→ verified semantic geometry
-→ wall/shaft-aware service network
-→ fully service-aware room generation
-→ sourced standards/material/product evidence
-→ whole-home optimization
-→ buildable handoff
+proximity does NOT create a route edge
 ```
 
-That is the path from a strong engineering prototype to a production Interior DesignOS.
+A route can cross a wall, shaft, riser, sleeve or corridor only when an explicit verified graph edge represents that path.
+
+Streamlit:
+
+- **Page 28 — Verified Service Network**.
+
+---
+
+# 15. v0.28 — Verified-Network Whole-Home Factory
+
+The v0.27 graph is now part of real candidate feasibility and whole-home optimisation.
+
+Implemented:
+
+- project-level network routing policy;
+- room-level routing-policy overrides;
+- explicit `max_target_access_ft` requirement for configured service rooms;
+- default verified-network-only routing;
+- default same-room target access;
+- candidate-specific graph routing;
+- `service_network_total_route_ft`;
+- `service_network_max_route_ft`;
+- `service_network_evaluated` feature;
+- `service_network:` failure/warning provenance;
+- required-room viability after routed-service filtering;
+- optimisation only after graph-feasible options survive;
+- service-network artifact SHA-256 in final package;
+- network-aware brief SHA-256;
+- package re-hash to v0.28.
+
+Permanent rule:
+
+```text
+overall candidate feasible
+    = geometry feasible
+      AND configured verified-network service feasible
+```
+
+Streamlit:
+
+- **Page 29 — Verified-Network Whole-Home Candidate Factory**.
+
+---
+
+# 16. v0.29 — Drainage Route Elevation + Slope Engineering
+
+First discipline-specific engineering layer on top of the routed service graph.
+
+Implemented:
+
+- drainage profile brief;
+- required numeric slope source provenance;
+- target elevation checks;
+- route-node elevation checks;
+- segment plan run;
+- segment fall in inches;
+- segment slope percentage;
+- total plan run;
+- total end-to-end fall;
+- average slope;
+- minimum required fall from caller-supplied slope;
+- fall margin;
+- optional maximum slope;
+- monotonic-fall checking;
+- local-rise detection;
+- vertical-drop semantics;
+- PASS / FAIL / UNKNOWN / NOT APPLICABLE;
+- artifact-level evaluation and export.
+
+Math:
+
+```text
+fall_in = (z_start - z_end) × 12
+slope_% = fall_in / (plan_run_ft × 12) × 100
+required_fall_in = plan_run_ft × 12 × required_slope_% / 100
+```
+
+Evidence invariant:
+
+```text
+unsourced numeric drainage slope → rejected
+missing elevation evidence → UNKNOWN, never PASS
+```
+
+Streamlit:
+
+- **Page 30 — Drainage Route Elevation + Slope Lab**.
+
+Not yet included:
+
+- fixture-unit loading;
+- pipe sizing;
+- hydraulic capacity;
+- traps/vents;
+- cleanouts;
+- stacks;
+- plumbing-code certification.
+
+---
+
+# 17. v0.30 — Routed Electrical Voltage Drop + Conductor Loss
+
+Second discipline-specific engineering layer on top of the verified routing graph.
+
+Implemented circuit models:
+
+### DC two-wire
+
+```text
+ΔV = 2 I L R
+```
+
+### Single-phase AC
+
+```text
+ΔV = 2 I L (R cosφ + X sinφ)
+```
+
+### Balanced three-phase AC
+
+```text
+ΔV = √3 I L (R cosφ + X sinφ)
+```
+
+Implemented:
+
+- verified routed cable length;
+- explicit slack fraction;
+- sourced conductor resistance Ω/km;
+- optional conductor reactance Ω/km;
+- explicit AC power factor;
+- optional resistance temperature adjustment;
+- explicit parallel conductors per phase;
+- voltage drop V;
+- voltage drop %;
+- receiving voltage;
+- routed I²R copper loss;
+- optional operating-hours energy loss;
+- optional sourced maximum voltage-drop limit;
+- PASS / FAIL / CALCULATED / UNKNOWN / NOT APPLICABLE.
+
+Evidence invariants:
+
+```text
+conductor resistance without conductor_source_ref → rejected
+voltage-drop limit without limit source → rejected
+AC limit + missing reactance → UNKNOWN, not fake PASS/FAIL
+```
+
+Streamlit:
+
+- **Page 31 — Routed Electrical Voltage Drop + Conductor Loss Lab**.
+
+Not yet included:
+
+- ampacity;
+- conductor derating;
+- protective-device selection;
+- fault current;
+- earth-fault loop impedance;
+- earthing/bonding;
+- short-circuit withstand;
+- discrimination/selectivity;
+- electrical-code certification.
+
+---
+
+# 18. Standards / guidance evidence framework
+
+Implemented:
+
+- sourced numeric rule schema;
+- authority;
+- jurisdiction;
+- version;
+- source URL;
+- checked timestamp;
+- clause/page/table locator;
+- min / max / range / equality rules;
+- deterministic unit normalization;
+- PASS / FAIL / UNKNOWN / NOT APPLICABLE;
+- room/tag/jurisdiction applicability;
+- same-scope disjoint-rule conflict detection.
+
+The repository deliberately does **not** ship a fake production standards corpus.
+
+Still needed:
+
+- lawful source acquisition;
+- jurisdiction/version tracking;
+- licensing review;
+- professional validation;
+- rule binding to planner outputs at scale.
+
+---
+
+# 19. Lifecycle material value
+
+Implemented:
+
+- installed material + labour cost;
+- explicit wastage;
+- maintenance cash flows;
+- service-life replacements;
+- disposal cost;
+- escalation;
+- discounting;
+- residual service-value credit;
+- NPV;
+- equivalent annual cost;
+- NPV per area;
+- cost/performance Pareto comparison;
+- deterministic sensitivity;
+- optional verified-evidence requirement;
+- missing lifecycle evidence stays unknown/non-feasible.
+
+---
+
+# 20. Privacy / zero-paid-cost guardrails
+
+Implemented:
+
+- provider-call cap;
+- declared estimated cost/call;
+- paid-use disable switch;
+- positive-cost call blocked before execution when paid usage disabled;
+- session usage ledger;
+- floor plans / home photos / quotations / verified geometry treated as sensitive;
+- external sensitive transfer disabled by default;
+- explicit consent gate;
+- metadata-only telemetry helper;
+- raw-content telemetry fields rejected.
+
+Important truth:
+
+Application-side session limits alone cannot guarantee ₹0 account-wide usage for a public service. Provider-side hard spending/free-tier limits or a shared quota layer are still needed for a truthful public-scale zero-cost guarantee.
+
+---
+
+# 21. 3D / final handoff
+
+## Verified-geometry 3D
+
+Implemented:
+
+- polygon triangulation;
+- verified room floor meshes;
+- wall extrusion from explicit height;
+- optional ceilings;
+- parametric object boxes;
+- verified opening line overlays;
+- Plotly 3D;
+- scene JSON export;
+- self-contained HTML export.
+
+Still needed:
+
+- wall thickness/shared-wall deduplication;
+- actual door/window voids;
+- door swings;
+- planner-native furniture meshes;
+- cabinetry/sanitaryware parametric models;
+- verified product dimensions;
+- material textures;
+- IES lighting overlays;
+- daylight overlays.
+
+## Final report
+
+Implemented:
+
+- design-package hash validation;
+- optional standards/lifecycle attachments;
+- executive evidence audit;
+- open professional flags;
+- source SHA provenance;
+- safe HTML escaping;
+- deterministic report SHA-256;
+- print-friendly HTML;
+- browser Print → Save as PDF route.
+
+---
+
+# 22. QA / engineering discipline
+
+Implemented across the project:
+
+- deterministic pytest coverage;
+- compile-all checks;
+- Python 3.11 / 3.12 core CI where configured;
+- dedicated page/workflow smoke tests for newer subsystems;
+- fail-closed integration tests;
+- regression tests for discovered bugs;
+- explicit evidence/model-boundary contracts;
+- source/provenance hashing for key artifacts.
+
+The project has repeatedly caught integration regressions in CI before merge; fixes are made on the feature branch and the dedicated workflow rerun before merge.
+
+---
+
+# 23. Current Streamlit engineering pages added in the newer pipeline
+
+```text
+24  Whole-Home Candidate Factory
+25  Verified Service Points + Routing
+26  Service-Aware Candidate Lab
+27  Service-Aware Whole-Home Candidate Factory
+28  Verified Service Network
+29  Verified-Network Whole-Home Candidate Factory
+30  Drainage Route Elevation + Slope Lab
+31  Routed Electrical Voltage Drop + Conductor Loss Lab
+```
+
+These sit alongside the earlier geometry, CV, lighting, materials, climate/physics, quotation, optimisation, guardrail, 3D and reporting pages.
+
+---
+
+# 24. Highest-priority unfinished engineering
+
+## A. Production-grade floor-plan understanding
+
+- robust OCR/dimension semantics;
+- walls/thicknesses;
+- doors/windows/columns/stairs;
+- scan/perspective correction;
+- interactive geometry editor;
+- real-world regression corpus.
+
+## B. Arbitrary-polygon room planning
+
+Current room planners remain strongest for exact rectangular rooms. The next geometry frontier is native planning in verified irregular polygons without bounding-box substitution.
+
+## C. Richer routing network
+
+- automatic proposals from verified wall/shaft geometry, still requiring user verification;
+- explicit penetrations/sleeves;
+- wall thickness;
+- shared shafts/risers;
+- route capacity/occupancy;
+- bend geometry;
+- cross-floor routing;
+- route cost/constructability.
+
+## D. Drainage engineering beyond slope
+
+- fixture load/units;
+- branch/stack sizing;
+- hydraulic capacity;
+- traps/vents;
+- cleanouts;
+- sourced plumbing rules.
+
+## E. Electrical engineering beyond voltage drop
+
+- conductor ampacity;
+- installation/ambient/grouping derating;
+- protective-device coordination;
+- fault current;
+- earthing;
+- thermal short-circuit checks;
+- sourced jurisdiction rules.
+
+## F. Ventilation / exhaust routing
+
+- routed duct geometry;
+- duct cross-section;
+- velocity;
+- equivalent length;
+- bend/fitting losses;
+- fan static-pressure requirement;
+- noise constraints;
+- sourced ventilation requirements.
+
+## G. Sourced standards + material science
+
+- lawful corpus acquisition;
+- licensing;
+- version/jurisdiction tracking;
+- source conflict resolution;
+- manufacturer data normalization;
+- professional validation.
+
+## H. Live product inventory / public-scale deployment
+
+- lawful live providers;
+- stock/delivery locality;
+- warranty;
+- price freshness;
+- quotas;
+- persistence/auth;
+- deletion/retention policy;
+- security/performance/accessibility/mobile review.
+
+## I. Grounded AI / ML convenience layer
+
+Still intentionally downstream of deterministic engineering:
+
+- style/inspiration embeddings;
+- preference learning;
+- grounded explanation layer;
+- local/browser model evaluation;
+- no-LLM fallback;
+- hallucination/evidence regression tests.
+
+---
+
+# 25. Current product truth
+
+NitiKube is now a substantial deterministic **Interior DesignOS / residential decision-engineering foundation**.
+
+It can already reason across:
+
+```text
+verified geometry
+→ deterministic room candidates
+→ opening/circulation constraints
+→ verified service evidence
+→ verified wall/shaft/riser routing
+→ candidate service feasibility
+→ routed drainage slope engineering
+→ routed electrical voltage-drop/loss engineering
+→ cost / preference / lifecycle constraints
+→ whole-home optimisation
+→ provenance package
+→ BOQ / 3D / final report
+```
+
+The strongest truthful product claim remains:
+
+> **NitiKube can automate and audit a growing portion of residential interior planning and engineering decision support while keeping missing evidence, unsupported geometry and regulated/safety-critical work explicitly visible instead of hallucinating certainty.**
+
+It is not yet a production-certified replacement for licensed professionals on regulated scopes.
+
+---
+
+# 26. Strategic direction
+
+The priority is not to turn NitiKube into an image generator.
+
+The target is:
+
+```text
+floor plan + location + budget + household requirements + verified product/material evidence
+                                    │
+                                    ▼
+                         evidence-backed candidate factory
+                                    │
+                                    ▼
+                     geometry + physics + service engineering
+                                    │
+                                    ▼
+                       whole-home constrained optimisation
+                                    │
+                                    ▼
+                  procurement-ready, auditable design package
+```
+
+AI/ML/CV should accelerate input understanding, style preference learning, retrieval and explanation **without being allowed to overwrite the deterministic evidence gates**.
