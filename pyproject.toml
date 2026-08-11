@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nitikube-ai-interior-engine"
+version = "0.1.0"
+description = "Physics-first, evidence-grounded interior engineering system"
+requires-python = ">=3.11"
+
+[tool.setuptools.packages.find]
+include = ["nitikube*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
