@@ -10,10 +10,10 @@ from nitikube.service_points import (
     evaluate_service_routing,
     kitchen_service_targets,
     load_service_points_json,
-    load_service_routing_brief,
     point_in_room,
     service_points_json,
 )
+from nitikube.service_routing_io import load_service_routing_brief
 from nitikube.verified_geometry import VerifiedRoom, rectangle_room
 
 
