@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+from nitikube.project import ProjectSnapshot
 from nitikube.verified_geometry import (
     VerifiedOpening,
     VerifiedRoom,
@@ -38,8 +39,8 @@ def test_rectangle_room_area_bounds_and_centroid():
 def test_self_intersecting_polygon_rejected():
     room = VerifiedRoom(
         room_id="X",
-        name="Bowtie",
-        polygon_ft=((0.0, 0.0), (4.0, 4.0), (0.0, 4.0), (4.0, 0.0)),
+        name="Crossed polygon",
+        polygon_ft=((0.0, 0.0), (4.0, 4.0), (0.0, 5.0), (5.0, 0.0)),
         ceiling_height_ft=9.0,
     )
     with pytest.raises(ValueError, match="self-intersects"):
@@ -107,6 +108,17 @@ def test_geometry_json_round_trip_and_schema():
     assert rooms[0].area_ft2 == pytest.approx(100.0)
     assert openings == []
     assert metadata["location"] == "Gurugram"
+
+
+def test_project_snapshot_can_persist_verified_geometry():
+    room = rectangle_room("A", "Living", 0.0, 0.0, 10.0, 10.0, 9.0)
+    geometry_payload = geometry_to_project_json("Home", [room])
+    project = ProjectSnapshot(project_name="Home")
+    project.attach_verified_geometry(geometry_payload)
+    round_tripped = ProjectSnapshot.from_json(project.to_json())
+    assert round_tripped.verified_geometry is not None
+    assert round_tripped.verified_geometry["schema"] == "nitikube.verified_geometry"
+    assert round_tripped.verified_geometry["rooms"][0]["room_id"] == "A"
 
 
 def test_svg_contains_room_and_opening():
